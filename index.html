@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0b18">
+  <meta name="description" content="PROJEKT 51 – Das Wohnzimmer-Protokoll">
+  <title>PROJEKT 51 // Das Wohnzimmer-Protokoll</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="einstellungen.js" defer></script>
+  <script src="spiel.js" defer></script>
+</head>
+<body>
+  <div class="grain" aria-hidden="true"></div>
+  <header class="header">
+    <div class="brand" aria-label="Projekt 51">
+      <div class="brand-icon">51<span class="brand-pulse"></span></div>
+      <div><strong>PROJEKT 51</strong><small>SONDERKOMMISSION WOHNZIMMER</small></div>
+    </div>
+    <button class="reset" id="reset" type="button" title="Fortschritt löschen">↺ <span>Neustart</span></button>
+  </header>
+  <main class="wrap">
+    <div class="status-line"><span><span class="status-dot"></span> VERBINDUNG AKTIV</span><span id="step-label">AKTENZUGRIFF · 00</span></div>
+    <div class="progress"><div id="progress-fill"></div></div>
+    <div id="app" aria-live="polite"><section class="panel"><p class="eyebrow">AKTE LÄDT …</p><h1>Bitte warten.</h1></section></div>
+    <footer>AKTE W-51 <span>•</span> NICHT ZUR WEITERGABE <span>•</span> EINHEIT 51</footer>
+  </main>
+</body>
+</html>
