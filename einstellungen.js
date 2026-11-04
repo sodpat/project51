@@ -9,12 +9,13 @@ window.PROJEKT51_EINSTELLUNGEN = {
     'assets/vierbilder-3.svg',
     'assets/vierbilder-4.svg'
   ],
-  vierGewinntWort: 'REISE',
+  vierGewinntWort: 'MUSIK',
   wurmBild: 'assets/wurm-sauer.jpg',
   fakeUnterkunft1: 'assets/fake-unterkunft-1.png',
   fakeUnterkunft2: 'assets/fake-unterkunft-2.png',
   fakeUnterkunft3: 'assets/fake-unterkunft-3.png',
   kartenBild: 'assets/karte-braunlage.png',
+  wordleZiel: 'PIRAT',
   googleMapsUrl: 'https://www.google.com/maps/search/?api=1&query=Braunlage%2C%20Deutschland',
   googleMapsEmbed: 'https://www.google.com/maps?q=Braunlage%2C%20Deutschland&z=12&output=embed'
 };

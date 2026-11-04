@@ -43,10 +43,18 @@
   }
   function showSuccess() {
     const {kicker,title,description,nextLabel} = g.pendingSuccess;
+    document.body.classList.remove('solve-flash');
+    void document.body.offsetWidth;
+    document.body.classList.add('solve-flash');
+    setTimeout(() => document.body.classList.remove('solve-flash'), 850);
     app.innerHTML = panel('PRÜFUNG ABGESCHLOSSEN // FREIGABE ERTEILT', `
+      <div class="success-burst" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      <span class="confetti a"></span><span class="confetti b"></span><span class="confetti c"></span>
       ${stamp(kicker)}<h1>${title}</h1><p class="lead">${description}</p>
-      <div class="status-box">✓ &nbsp; Identitätslevel erhöht. Verdachtsmoment bleibt bestehen.</div>
+      <div class="status-box success-box">✓ &nbsp; Identitätslevel erhöht. Verdachtsmoment bleibt bestehen.</div>
       <div class="buttons">${button('proceed',nextLabel,'full')}</div>`);
+    const panelEl = app.querySelector('.panel');
+    if (panelEl) panelEl.classList.add('success-panel');
     $('#proceed').onclick = () => next();
     window.scrollTo({top:0,behavior:'smooth'});
   }
@@ -136,23 +144,64 @@
     if(g.puzzle.every((p,i)=>p===i)) success('TEST 02 / 06', 'Wurm wiederhergestellt.', 'Alle neun Teile sind am richtigen Platz. Das Bild ist verstörend vollständig.');
   }
   const WORDS = ['KABEL','KARTE','WOLKE','KOMET','MASKE','LAMPE','KISTE','NACHT','WURME','RAUCH','SOFAS','ALARM'];
+  function scoreGuess(guess, target) {
+    const result = Array(guess.length).fill('absent');
+    const counts = {};
+    for (let i = 0; i < target.length; i++) {
+      if (guess[i] === target[i]) result[i] = 'correct';
+      else counts[target[i]] = (counts[target[i]] || 0) + 1;
+    }
+    for (let i = 0; i < guess.length; i++) {
+      if (result[i] !== 'correct' && counts[guess[i]] > 0) {
+        result[i] = 'present';
+        counts[guess[i]]--;
+      }
+    }
+    return result;
+  }
   function hacking() {
-    const history = g.hack || [];
-    const left = Math.max(0,4-history.length);
-    const log = history.map(w => `&gt; ${w}: ${[...w].filter((c,i)=>c==='KABEL'[i]).length}/5 Positionen korrekt`).reverse().join('<br>');
+    const target = normalize(cfg.wordleZiel || 'PIRAT').slice(0,5);
+    const history = Array.isArray(g.hack) ? g.hack : [];
+    const max = 6;
+    const solved = history.includes(target);
+    const left = Math.max(0, max - history.length);
+    const rows = Array.from({length:max}, (_,row) => {
+      const guess = history[row] || '';
+      const score = guess ? scoreGuess(guess, target) : [];
+      return `<div class="wordle-row">${Array.from({length:5}, (_,i) => {
+        const ch = guess[i] || '';
+        const cls = score[i] ? ' ' + score[i] : (guess ? ' filled' : '');
+        return `<span class="wordle-cell${cls}">${escapeHTML(ch)}</span>`;
+      }).join('')}</div>`;
+    }).join('');
+    const recent = history.length ? history.slice(-3).reverse().map(gw => {
+      const hits = scoreGuess(gw, target);
+      const info = hits.filter(x=>x==='correct').length;
+      return `&gt; ${gw}: ${info}/5 exakt`;
+    }).join('<br>') : '&gt; FÜNF BUCHSTABEN. NICHTS OFFENSICHTLICHES.';
     app.innerHTML = panel('EIGNUNGSPRÜFUNG // 03 VON 06', `
       <span class="section-number">TERMINALZUGANG</span><h2>Hacke den <span class="accent">lächerlich sicheren</span> Computer.</h2>
-      <p class="muted">Ein einziges Wort passt. Nach jeder Eingabe siehst du, wie viele Buchstaben <strong>an der richtigen Position</strong> stehen. Vier Fehlversuche führen zum Neustart des Terminals.</p>
-      <div class="term"><div class="term-head">[ ACCESS RESTRICTED ] &nbsp; VERSUCHE: ${'●'.repeat(left)}${'○'.repeat(4-left)}</div>
-      <div class="term-grid">${WORDS.map((w,i)=>`<button type="button" class="word ${history.includes(w)?'used':''}" data-word="${w}" ${history.includes(w)||!left?'disabled':''}><span style="opacity:.6">0x${(0xF1A0+i*0x10).toString(16).toUpperCase()}</span> ${w}</button>`).join('')}</div>
-      <div class="terminal-log">${log || '&gt; WÄHLE EIN CODEWORT AUS DER LISTE'}${history.length>=2?'<br>&gt; NOTFALLHINWEIS: Das Wort beginnt mit KA.':''}</div></div>
-      ${left ? '' : `<div class="buttons">${button('reboot','TERMINAL NEU STARTEN','full')}</div>`}`);
-    $$('.word').forEach(el => el.onclick = () => {
-      const word=el.dataset.word;
-      if(word==='KABEL') return success('TEST 03 / 06','Zugang gewährt.', 'Der Computer hatte offenbar das Passwort KABEL. Die IT-Abteilung schweigt dazu.');
-      g.hack.push(word);save();render();
-    });
-    if ($('#reboot')) $('#reboot').onclick=()=>{g.hack=[];save();render();};
+      <p class="muted">Diesmal im Stil eines peinlich modernen Sicherheitsprotokolls. Finde ein <strong>fünfbuchstabiges</strong> Wort. Grün = richtiger Buchstabe am richtigen Platz. Gelb = richtiger Buchstabe, aber falscher Platz. Grau = kommt nicht vor.</p>
+      <div class="term"><div class="term-head">[ WORDLE PROTOKOLL ] &nbsp; VERSUCHE: ${'●'.repeat(left)}${'○'.repeat(max-left)}</div>
+      <div class="wordle-board">${rows}</div>
+      <form id="wordle-form" class="wordle-form" ${solved || !left ? 'hidden' : ''}>
+        <input id="wordle-input" class="input" placeholder="5 Buchstaben" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="5" required>
+        <button type="submit" class="btn">Versuch senden</button>
+      </form>
+      <div class="terminal-log">${recent}${history.length>=3 && !solved ? '<br>&gt; HINWEIS: Es ist etwas, das man früher möglicherweise mit Augenklappe getragen hätte. Oder auch nicht.' : ''}</div></div>
+      ${!left && !solved ? `<div class="buttons">${button('reboot','WORDLE NEU STARTEN','full')}</div>` : ''}
+      ${feedback()}`);
+    if ($('#wordle-form')) $('#wordle-form').onsubmit = e => {
+      e.preventDefault();
+      const guess = normalize($('#wordle-input').value).slice(0,5);
+      if (guess.length !== 5) return error('Bitte genau 5 Buchstaben eingeben.');
+      if (history.includes(guess)) return error('Dieses Wort hast du schon ausprobiert.');
+      g.hack.push(guess); save();
+      if (guess === target) return success('TEST 03 / 06','Zugang gewährt.', 'Der Computer akzeptiert das Wort erstaunlicherweise. Seine Schutzmaßnahmen waren offenbar hauptsächlich Dekoration.');
+      if (g.hack.length >= max) return render();
+      render();
+    };
+    if ($('#reboot')) $('#reboot').onclick = () => { g.hack = []; save(); render(); };
   }
   function memory() {
     const mem = g.memory;
@@ -287,9 +336,9 @@
       ${stamp('HERZLICHEN GLÜCKWUNSCH')}
       <h1>Überraschung. <span class="accent">Wir verreisen!</span></h1>
       <p class="lead">Wir haben wirklich keine Kosten und Mühen gescheut, um eine unvergessliche Unterkunft für dich zu finden.</p>
-      <img class="fake-picture" src="${escapeHTML(cfg.fakeUnterkunft1)}" alt="Scherzhafte Unterkunft aus Kartons unter einer Brücke">
-      <span class="fake-label">KATEGORIE: EXPERIMENTELL</span>
-      <p class="muted" style="margin-top:15px">Direkte Autobahnanbindung. Luftige Architektur. Regionaler Charme.</p>
+      <img class="fake-picture" src="${escapeHTML(cfg.fakeUnterkunft2)}" alt="Scherzhaftes Mikro-Zimmer als erste Fake-Unterkunft">
+      <span class="fake-label">KATEGORIE: KOMPAKT</span>
+      <p class="muted" style="margin-top:15px">Effizient geschnitten. Wenig Laufwege. Wer sich umdrehen will, sollte es vorher anmelden.</p>
       <div class="buttons">${button('fake-next','Äh … weiter? →','full')}</div>`);
     $('#fake-next').onclick=()=>next();
   }
@@ -297,9 +346,9 @@
     app.innerHTML=panel('DEIN GESCHENK // REISEUNTERLAGEN 2 / 4', `
       ${stamp('UPGRADE BESTÄTIGT')}
       <h2>Okay. Zugegeben.<br><span class="accent">Wir haben noch ein Upgrade.</span></h2>
-      <img class="fake-picture" src="${escapeHTML(cfg.fakeUnterkunft2)}" alt="Scherzhaftes Mikro-Zimmer als zweite Fake-Unterkunft">
-      <span class="fake-label">DELUXE VERSION</span>
-      <p class="lead">Jetzt mit Etagenbett! Stauraum ist theoretisch vorhanden. Sauerstoff ebenfalls.</p>
+      <img class="fake-picture" src="${escapeHTML(cfg.fakeUnterkunft1)}" alt="Scherzhafte Unterkunft aus Kartons unter einer Brücke">
+      <span class="fake-label">DELUXE OPEN AIR</span>
+      <p class="lead">Jetzt mit erheblich mehr Platz, maximaler Frischluft und bester Anbindung an die Unterseite einer Brücke.</p>
       <div class="buttons">${button('fake-next','Das kann noch nicht alles sein … →','full')}</div>`);
     $('#fake-next').onclick=()=>next();
   }
