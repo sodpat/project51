@@ -10,7 +10,7 @@ window.PROJEKT51_EINSTELLUNGEN = {
     'assets/vierbilder-4.svg'
   ],
   vierGewinntWort: 'REISE',
-  wurmBild: 'assets/wurm-foto.jpg',
+  wurmBild: 'assets/wurm-sauer.jpg',
   fakeUnterkunft1: 'assets/fake-unterkunft-1.png',
   fakeUnterkunft2: 'assets/fake-unterkunft-2.png',
   fakeUnterkunft3: 'assets/fake-unterkunft-3.png',

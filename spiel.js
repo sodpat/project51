@@ -12,7 +12,7 @@
   const escapeHTML = str => String(str || '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
   const fresh = () => ({
     stage: 0,
-    puzzle: [24,1,8,22,3,9,14,5,18,11,20,7,0,16,13,4,21,10,6,23,17,2,19,15,12], swaps: 0,
+    puzzle: [4,0,7,2,8,3,1,6,5], swaps: 0,
     hack: [],
     memory: { order: ['🪱','🦆','🛋️','🕵️','🦆','📦','🕵️','🔑','🛋️','🪱','🔑','📦'], open: [], matched: [], turns: 0 },
     quiz: 0, chase: 0, question: 0, answers: []
@@ -21,7 +21,7 @@
   try { g = {...fresh(), ...JSON.parse(localStorage.getItem(STORE) || '{}')}; } catch { g = fresh(); }
   if (!g.memory || !Array.isArray(g.memory.order)) g.memory = fresh().memory;
   if (g.memory.open?.length > 1) g.memory.open = [];
-  if (!Array.isArray(g.puzzle) || g.puzzle.length !== 25) g.puzzle = fresh().puzzle;
+  if (!Array.isArray(g.puzzle) || g.puzzle.length !== 9) g.puzzle = fresh().puzzle;
   if (g.stage < 0 || g.stage > 13) g.stage = 0;
   let selectedTile = null, pointerStart = null, suppressClickUntil = 0, memBusy = false, previewTimer = null;
   const save = () => { try {localStorage.setItem(STORE, JSON.stringify(g));} catch (_) {} };
@@ -99,14 +99,13 @@
   }
   const puzzleImage = () => escapeHTML(cfg.wurmBild || 'assets/wurm-puzzle.svg');
   function wormPuzzle() {
-    const size = 5;
     app.innerHTML = panel('EIGNUNGSPRÜFUNG // 02 VON 06', `
       <span class="section-number">BILDREKONSTRUKTION</span><h2>Der <span class="accent">zerstückelte Wurm.</span></h2>
-      <p class="muted">Ein Beweisfoto wurde in 25 Teile zerlegt. Stelle es wieder her. Ziehe Teile aufeinander <strong>oder tippe zwei Teile nacheinander an</strong>, um sie zu tauschen.</p>
-      <div class="puzzle-wrap"><div class="puzzle-board puzzle-board-5" id="puzzle-board" role="group" aria-label="Fünfundzwanzigteiliges Bilderpuzzle">${g.puzzle.map((part,pos)=>{
-        const x = (part%size) * 25, y = Math.floor(part/size) * 25;
-        return `<button type="button" class="puzzle-tile puzzle-tile-5 ${selectedTile === pos ? 'selected' : ''}" data-pos="${pos}" aria-label="Puzzleteil an Stelle ${pos+1}" style="background-image:url('${puzzleImage()}');background-position:${x}% ${y}%"></button>`;
-      }).join('')}</div><div class="puzzle-stats"><span>VERSCHIEBUNGEN: ${g.swaps}</span><span>${g.puzzle.filter((p,i)=>p===i).length}/25 korrekt</span></div></div>
+      <p class="muted">Ein Beweisfoto wurde in neun Teile zerlegt. Stelle es wieder her. Ziehe Teile aufeinander <strong>oder tippe zwei Teile nacheinander an</strong>, um sie zu tauschen.</p>
+      <div class="puzzle-wrap"><div class="puzzle-board" id="puzzle-board" role="group" aria-label="Neunteiliges Bilderpuzzle">${g.puzzle.map((part,pos)=>{
+        const x = (part%3) * 50, y = Math.floor(part/3) * 50;
+        return `<button type="button" class="puzzle-tile ${selectedTile === pos ? 'selected' : ''}" data-pos="${pos}" aria-label="Puzzleteil an Stelle ${pos+1}" style="background-image:url('${puzzleImage()}');background-position:${x}% ${y}%"></button>`;
+      }).join('')}</div><div class="puzzle-stats"><span>VERSCHIEBUNGEN: ${g.swaps}</span><span>${g.puzzle.filter((p,i)=>p===i).length}/9 korrekt</span></div></div>
       <div id="preview-holder" hidden><img class="preview" src="${puzzleImage()}" alt="Originalbild als kurzer Tipp"></div>
       <div class="buttons">${button('preview','Originalbild kurz zeigen','secondary')}</div>${feedback()}`);
     const board = $('#puzzle-board');
@@ -134,7 +133,7 @@
   function swapTiles(a,b) {
     [g.puzzle[a],g.puzzle[b]]=[g.puzzle[b],g.puzzle[a]];
     g.swaps++;save();render();
-    if(g.puzzle.every((p,i)=>p===i)) success('TEST 02 / 06', 'Wurm wiederhergestellt.', 'Alle 25 Teile sind am richtigen Platz. Das Bild ist verstörend vollständig.');
+    if(g.puzzle.every((p,i)=>p===i)) success('TEST 02 / 06', 'Wurm wiederhergestellt.', 'Alle neun Teile sind am richtigen Platz. Das Bild ist verstörend vollständig.');
   }
   const WORDS = ['KABEL','KARTE','WOLKE','KOMET','MASKE','LAMPE','KISTE','NACHT','WURME','RAUCH','SOFAS','ALARM'];
   function hacking() {
