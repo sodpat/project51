@@ -355,16 +355,10 @@
   }
   function playSignal() {
     try {
-      const Context=window.AudioContext||window.webkitAudioContext; if(!Context) return;
-      const ctx=new Context();
-      [120,162,93].forEach((freq,i)=>{
-        const osc=ctx.createOscillator(),gain=ctx.createGain();
-        const t=ctx.currentTime+i*0.36;osc.type='triangle';osc.frequency.setValueAtTime(freq,t);
-        gain.gain.setValueAtTime(0,t);gain.gain.linearRampToValueAtTime(0.045,t+0.05);
-        gain.gain.exponentialRampToValueAtTime(0.001,t+0.31);osc.connect(gain);gain.connect(ctx.destination);
-        osc.start(t);osc.stop(t+0.32);
-      });
-      setTimeout(()=>ctx.close().catch(()=>{}),1800);
+      if (!signalAudio) signalAudio = new Audio('assets/signal-miau.mp3');
+      signalAudio.pause();
+      signalAudio.currentTime = 0;
+      signalAudio.play().catch(() => {});
     } catch (_) { /* Ton ist optional; die Mission bleibt auch ohne ihn spielbar. */ }
   }
   async function sha256(text) {
