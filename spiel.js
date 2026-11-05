@@ -3,7 +3,7 @@
 (() => {
   'use strict';
   const cfg = window.PROJEKT51_EINSTELLUNGEN || {};
-  const STORE = 'projekt51_wohnzimmer_v1';
+  const STORE = 'projekt51_wohnzimmer_v2';
   const PASS_HASH = 'a8df80772631385d4842adc5a0a620474814cda1d0d96bc4166b643fd5e11cd6';
   const app = document.getElementById('app');
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -15,15 +15,16 @@
     puzzle: [4,0,7,2,8,3,1,6,5], swaps: 0,
     hack: [],
     memory: { order: ['🪱','🦆','🛋️','🕵️','🦆','📦','🕵️','🔑','🛋️','🪱','🔑','📦'], open: [], matched: [], turns: 0 },
-    quiz: 0, chase: 0, question: 0, answers: []
+    quiz: 0, chase: 0, cat: {wins:0, attempts:0}, question: 0, answers: []
   });
   let g;
   try { g = {...fresh(), ...JSON.parse(localStorage.getItem(STORE) || '{}')}; } catch { g = fresh(); }
   if (!g.memory || !Array.isArray(g.memory.order)) g.memory = fresh().memory;
+  if (!g.cat || typeof g.cat.wins !== 'number') g.cat = {wins:0, attempts:0};
   if (g.memory.open?.length > 1) g.memory.open = [];
   if (!Array.isArray(g.puzzle) || g.puzzle.length !== 9) g.puzzle = fresh().puzzle;
-  if (g.stage < 0 || g.stage > 13) g.stage = 0;
-  let selectedTile = null, pointerStart = null, suppressClickUntil = 0, memBusy = false, previewTimer = null;
+  if (g.stage < 0 || g.stage > 14) g.stage = 0;
+  let selectedTile = null, pointerStart = null, suppressClickUntil = 0, memBusy = false, previewTimer = null, catRaf = null;
   const save = () => { try {localStorage.setItem(STORE, JSON.stringify(g));} catch (_) {} };
   const panel = (eyebrow, body) => `<section class="panel"><p class="eyebrow">${eyebrow}</p>${body}</section>`;
   const stamp = s => `<span class="stamp">◉ &nbsp;${s}</span>`;
@@ -31,9 +32,9 @@
   const feedback = () => `<p id="feedback" class="feedback" role="status"></p>`;
   const error = text => { const node = $('#feedback'); if (node) {node.textContent = text;node.className = 'feedback bad';} };
   const status = () => {
-    const labels = ['AUFTRAGSEINGANG', 'TEST 01 / 06', 'TEST 02 / 06', 'TEST 03 / 06', 'TEST 04 / 06', 'TEST 05 / 06', 'TEST 06 / 06', 'BEFRAGUNG', 'ZUGANG GESPERRT', 'ARCHIV A', 'ARCHIV B', 'ARCHIV C', 'STANDORT', 'ABGESCHLOSSEN'];
+    const labels = ['AUFTRAGSEINGANG', 'TEST 01 / 07', 'TEST 02 / 07', 'TEST 03 / 07', 'TEST 04 / 07', 'TEST 05 / 07', 'TEST 06 / 07', 'TEST 07 / 07', 'BEFRAGUNG', 'ZUGANG GESPERRT', 'ARCHIV A', 'ARCHIV B', 'ARCHIV C', 'STANDORT', 'ABGESCHLOSSEN'];
     $('#step-label').textContent = labels[g.stage] || 'GEHEIM';
-    const percentages = [2,9,17,25,33,41,49,63,76,82,88,92,96,100];
+    const percentages = [2,9,16,23,30,38,45,53,66,78,83,87,91,96,100];
     $('#progress-fill').style.width = `${percentages[g.stage]}%`;
   };
   const next = (stage = g.stage + 1) => {g.pendingSuccess = null; g.stage = stage; save(); selectedTile = null; memBusy = false; render(); window.scrollTo({top:0,behavior:'smooth'});};
@@ -59,6 +60,7 @@
     window.scrollTo({top:0,behavior:'smooth'});
   }
   function render() {
+    if (catRaf !== null) {cancelAnimationFrame(catRaf);catRaf = null;}
     status();
     if(g.pendingSuccess && g.pendingSuccess.stage===g.stage) return showSuccess();
     switch(g.stage) {
@@ -66,16 +68,17 @@
       case 1: return fourPictures();
       case 2: return wormPuzzle();
       case 3: return hacking();
-      case 4: return memory();
-      case 5: return quiz();
-      case 6: return chase();
-      case 7: return questions();
-      case 8: return pocketPassword();
-      case 9: return firstFake();
-      case 10: return secondFake();
-      case 11: return thirdFake();
-      case 12: return mapReveal();
-      case 13: return finalReveal();
+      case 4: return spinningCat();
+      case 5: return memory();
+      case 6: return quiz();
+      case 7: return chase();
+      case 8: return questions();
+      case 9: return pocketPassword();
+      case 10: return firstFake();
+      case 11: return secondFake();
+      case 12: return thirdFake();
+      case 13: return mapReveal();
+      case 14: return finalReveal();
       default: return intro();
     }
   }
@@ -92,7 +95,7 @@
   function fourPictures() {
     const pics = cfg.bilderVierEins || [];
     const answer = normalize(cfg.vierGewinntWort || 'REISE');
-    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 01 VON 06', `
+    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 01 VON 07', `
       <span class="section-number">ANALYSEMODUL A</span><h2>4 Bilder.<br><span class="accent">1 Wort.</span></h2>
       <p class="muted">Vier Hinweise, ein gemeinsamer Begriff. Diesmal hat der Wurm ausnahmsweise nichts damit zu tun.</p>
       <div class="four-grid">${[0,1,2,3].map(i=>`<div class="pic-tile"><img src="${escapeHTML(pics[i] || '')}" alt="Bildausschnitt ${i+1}"><span>BEWEIS 0${i+1}</span></div>`).join('')}</div>
@@ -101,13 +104,13 @@
       ${feedback()}<div class="buttons"><button type="submit" class="btn full">Wort prüfen →</button></div></form>`);
     $('#four-form').onsubmit = e => {
       e.preventDefault();
-      if(normalize($('#four-answer').value) === answer) success('TEST 01 / 06', `Korrekt. ${escapeHTML(cfg.vierGewinntWort || 'REISE')}.`, 'Die Leitstelle ist überrascht, wie schnell du diesen hochkomplexen Zusammenhang erkannt hast.');
+      if(normalize($('#four-answer').value) === answer) success('TEST 01 / 07', `Korrekt. ${escapeHTML(cfg.vierGewinntWort || 'REISE')}.`, 'Die Leitstelle ist überrascht, wie schnell du diesen hochkomplexen Zusammenhang erkannt hast.');
       else error('Leider falsch. Die vier Bilder scheinen ziemlich eindeutig in dieselbe Richtung zu zeigen.');
     };
   }
   const puzzleImage = () => escapeHTML(cfg.wurmBild || 'assets/wurm-puzzle.svg');
   function wormPuzzle() {
-    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 02 VON 06', `
+    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 02 VON 07', `
       <span class="section-number">BILDREKONSTRUKTION</span><h2>Der <span class="accent">zerstückelte Wurm.</span></h2>
       <p class="muted">Ein Beweisfoto wurde in neun Teile zerlegt. Stelle es wieder her. Ziehe Teile aufeinander <strong>oder tippe zwei Teile nacheinander an</strong>, um sie zu tauschen.</p>
       <div class="puzzle-wrap"><div class="puzzle-board" id="puzzle-board" role="group" aria-label="Neunteiliges Bilderpuzzle">${g.puzzle.map((part,pos)=>{
@@ -141,9 +144,8 @@
   function swapTiles(a,b) {
     [g.puzzle[a],g.puzzle[b]]=[g.puzzle[b],g.puzzle[a]];
     g.swaps++;save();render();
-    if(g.puzzle.every((p,i)=>p===i)) success('TEST 02 / 06', 'Wurm wiederhergestellt.', 'Alle neun Teile sind am richtigen Platz. Das Bild ist verstörend vollständig.');
+    if(g.puzzle.every((p,i)=>p===i)) success('TEST 02 / 07', 'Wurm wiederhergestellt.', 'Alle neun Teile sind am richtigen Platz. Das Bild ist verstörend vollständig.');
   }
-  const WORDS = ['KABEL','KARTE','WOLKE','KOMET','MASKE','LAMPE','KISTE','NACHT','WURME','RAUCH','SOFAS','ALARM'];
   function scoreGuess(guess, target) {
     const result = Array(guess.length).fill('absent');
     const counts = {};
@@ -179,7 +181,7 @@
       const info = hits.filter(x=>x==='correct').length;
       return `&gt; ${gw}: ${info}/5 exakt`;
     }).join('<br>') : '&gt; FÜNF BUCHSTABEN. NICHTS OFFENSICHTLICHES.';
-    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 03 VON 06', `
+    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 03 VON 07', `
       <span class="section-number">TERMINALZUGANG</span><h2>Hacke den <span class="accent">lächerlich sicheren</span> Computer.</h2>
       <p class="muted">Diesmal im Stil eines peinlich modernen Sicherheitsprotokolls. Finde ein <strong>fünfbuchstabiges</strong> Wort. Grün = richtiger Buchstabe am richtigen Platz. Gelb = richtiger Buchstabe, aber falscher Platz. Grau = kommt nicht vor.</p>
       <div class="term"><div class="term-head">[ WORDLE PROTOKOLL ] &nbsp; VERSUCHE: ${'●'.repeat(left)}${'○'.repeat(max-left)}</div>
@@ -197,16 +199,75 @@
       if (guess.length !== 5) return error('Bitte genau 5 Buchstaben eingeben.');
       if (history.includes(guess)) return error('Dieses Wort hast du schon ausprobiert.');
       g.hack.push(guess); save();
-      if (guess === target) return success('TEST 03 / 06','Zugang gewährt.', 'Der Computer akzeptiert das Wort erstaunlicherweise. Seine Schutzmaßnahmen waren offenbar hauptsächlich Dekoration.');
+      if (guess === target) return success('TEST 03 / 07','Zugang gewährt.', 'Der Computer akzeptiert das Wort erstaunlicherweise. Seine Schutzmaßnahmen waren offenbar hauptsächlich Dekoration.');
       if (g.hack.length >= max) return render();
       render();
     };
     if ($('#reboot')) $('#reboot').onclick = () => { g.hack = []; save(); render(); };
   }
+  // OEEAEE-KATZE – bewusst albernes Reflexspiel, ohne Audio-/Internet-Abhängigkeiten.
+  function spinningCat(message = '') {
+    const total = 3;
+    if (g.cat.wins >= total) return success('TEST 04 / 07', 'Rotation erfolgreich.', 'Die Katze wurde dreimal erfolgreich kalibriert. Warum das nötig war, ist streng geheim.');
+    const round = g.cat.wins;
+    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 04 VON 07', `
+      <span class="section-number">FELINE ROTATIONSEINHEIT</span>
+      <h2>OEEAEE – <span class="accent">Drehzahlprüfung.</span></h2>
+      <p class="muted">Diese Katze rotiert aus Gründen der nationalen Sicherheit. Stoppe sie <strong>möglichst aufrecht</strong>. Drei gültige Stopps sind nötig.</p>
+      <div class="cat-arena">
+        <div class="cat-ring" aria-hidden="true"><div class="cat-zero"></div></div>
+        <img class="cat-image" id="cat-image" src="assets/oeeaee-katze.png" alt="Oeeaee-Katze im Rotationsprüfstand" draggable="false">
+        <div class="cat-label">OEEAEE // v${round+1}.0</div>
+      </div>
+      <div class="cat-score"><span>GÜLTIGE STOPPS <b>${g.cat.wins} / ${total}</b></span><span>VERSUCHE <b>${g.cat.attempts}</b></span></div>
+      <p class="muted small">Grüner Bereich = Katze steht gerade. Beim Drehen auf <strong>JETZT STOPPEN</strong> tippen.</p>
+      <div class="cat-buttons">${button('cat-start','▶ Rotation starten','full')}${button('cat-stop','■ JETZT STOPPEN','secondary full')}</div>
+      <p id="cat-result" class="cat-result" role="status">${escapeHTML(message)}</p>`);
+    const img = $('#cat-image');
+    const startBtn = $('#cat-start');
+    const stopBtn = $('#cat-stop');
+    stopBtn.disabled = true;
+    let running = false;
+    let angle = 130 + (round * 45);
+    let started = 0;
+    const speed = [145,185,220][round];
+    img.style.transform = `rotate(${angle}deg)`;
+    startBtn.onclick = () => {
+      if (running) return;
+      running = true;
+      started = performance.now();
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+      $('#cat-result').textContent = 'OEEAEE OEEAEE OEEAEE …';
+      function frame(now) {
+        if (!running || g.stage !== 4) return;
+        angle = (130 + round*45 + (now-started)*speed/1000) % 360;
+        img.style.transform = `rotate(${angle}deg)`;
+        catRaf = requestAnimationFrame(frame);
+      }
+      catRaf = requestAnimationFrame(frame);
+    };
+    stopBtn.onclick = () => {
+      if (!running) return;
+      running = false;
+      if (catRaf !== null) {cancelAnimationFrame(catRaf);catRaf = null;}
+      stopBtn.disabled = true;
+      const delta = Math.min(angle, 360-angle);
+      g.cat.attempts++;
+      const hit = delta <= 42;
+      if (hit) {
+        g.cat.wins++; save();
+        if (g.cat.wins >= total) return success('TEST 04 / 07', 'OEEAEE kalibriert.', 'Dreimal aufrecht gestoppt. Diese Information wird in der Personalakte der Katze vermerkt.');
+        return spinningCat('✓ Rotation bestätigt. Nächste Drehzahl wird erhöht.');
+      }
+      save();
+      spinningCat('✗ Katze zu schief. Noch einmal versuchen.');
+    };
+  }
   function memory() {
     const mem = g.memory;
     const isShown = i => mem.open.includes(i) || mem.matched.includes(i);
-    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 04 VON 06', `
+    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 05 VON 07', `
       <span class="section-number">GEDÄCHTNISDIAGNOSTIK</span><h2>Wir prüfen dein <span class="accent">Kurzzeitgedächtnis.</span></h2>
       <p class="muted">Finde sechs Paare. Alle Beteiligten bestreiten, an diesem Test mitgewirkt zu haben.</p>
       <div class="memory-grid">${mem.order.map((symbol,i)=>`<button type="button" class="memory-card ${isShown(i)?'open':''} ${mem.matched.includes(i)?'matched':''}" data-i="${i}" aria-label="Karte ${i+1}${isShown(i)?' '+symbol:''}" ${mem.matched.includes(i)?'disabled':''}>${isShown(i)?symbol:'51'}</button>`).join('')}</div>
@@ -219,11 +280,11 @@
       if(mem.open.length===2){
         memBusy=true; const [a,b]=mem.open;
         setTimeout(()=>{
-          if(g.stage!==4) return;
+          if(g.stage!==5) return;
           mem.turns++;
           if(mem.order[a]===mem.order[b]) mem.matched.push(a,b);
           mem.open=[];memBusy=false;save();
-          if(mem.matched.length===12) success('TEST 04 / 06','Gedächtnis ausreichend.', 'Alle sechs Paare gefunden. Die Ermittlungsakte ist weiterhin völlig unklar.');
+          if(mem.matched.length===12) success('TEST 05 / 07','Gedächtnis ausreichend.', 'Alle sechs Paare gefunden. Die Ermittlungsakte ist weiterhin völlig unklar.');
           else render();
         },780);
       }
@@ -236,7 +297,7 @@
   ];
   function quiz() {
     const q=QUIZ[g.quiz];
-    app.innerHTML=panel('EIGNUNGSPRÜFUNG // 05 VON 06', `
+    app.innerHTML=panel('EIGNUNGSPRÜFUNG // 06 VON 07', `
       <span class="section-number">FRAGERUNDE ${g.quiz+1} / ${QUIZ.length}</span><h2>Wer wird <span class="accent">Verdachtsmillionär?</span></h2>
       <p class="quiz-money">FRAGE FÜR ${q.worth}</p><p class="lead" style="font-weight:850;color:#fff">${q.q}</p>
       <div class="quiz-options">${q.options.map((v,i)=>`<button type="button" class="quiz-option" data-i="${i}"><strong>${'ABCD'[i]}</strong>${escapeHTML(v.slice(3))}</button>`).join('')}</div>
@@ -244,20 +305,20 @@
     $$('.quiz-option').forEach(el=>el.onclick=()=>{
       if(Number(el.dataset.i)!==q.correct) return error('Falsch. Die Spielleitung ist enttäuscht, aber nicht überrascht. Versuch es erneut.');
       g.quiz++;save();
-      if(g.quiz===QUIZ.length) success('TEST 05 / 06','Du bist Verdachtsmillionär.', 'Das Preisgeld wurde leider in Form eines behördlichen Schulterklopfens ausgezahlt.');
+      if(g.quiz===QUIZ.length) success('TEST 06 / 07','Du bist Verdachtsmillionär.', 'Das Preisgeld wurde leider in Form eines behördlichen Schulterklopfens ausgezahlt.');
       else render();
     });
   }
   function chase() {
     const position = (2+g.chase*7)%12;
-    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 06 VON 06', `
+    app.innerHTML = panel('EIGNUNGSPRÜFUNG // 07 VON 07', `
       <span class="section-number">VERDÄCHTIGENFESTNAHME</span><h2>Fang den <span class="accent">Wurm.</span></h2>
       <p class="muted">Ein Verdächtiger versucht, sich der Festnahme zu entziehen. Tippe ihn achtmal an. Warum? Das ist geheim.</p>
       <div class="chase-grid">${Array.from({length:12},(_,i)=>`<button type="button" class="chase-cell ${i===position?'target':''}" data-pos="${i}" aria-label="${i===position?'Wurm fangen':'Leeres Feld'}">${i===position?'🪱':'·'}</button>`).join('')}</div>
       <p class="muted small" style="text-align:center">ERFOLGREICHE FESTNAHMEN</p><p class="count" style="text-align:center">${g.chase} <span class="muted" style="font-size:22px">/ 8</span></p>`);
     $$('.chase-cell.target').forEach(el=>el.onclick=()=>{
       g.chase++;save();
-      if(g.chase>=8) success('ALLE 6 TESTS BESTANDEN','Du bist qualifiziert.', 'Wofür genau, wissen wir selbst noch nicht. Aber der Verdächtige ist erschöpft.', 'Bericht anhören →');
+      if(g.chase>=8) success('ALLE 7 TESTS BESTANDEN','Du bist qualifiziert.', 'Wofür genau, wissen wir selbst noch nicht. Aber der Verdächtige ist erschöpft.', 'Bericht anhören →');
       else render();
     });
   }
@@ -336,9 +397,9 @@
       ${stamp('HERZLICHEN GLÜCKWUNSCH')}
       <h1>Überraschung. <span class="accent">Wir verreisen!</span></h1>
       <p class="lead">Wir haben wirklich keine Kosten und Mühen gescheut, um eine unvergessliche Unterkunft für dich zu finden.</p>
-      <img class="fake-picture" src="${escapeHTML(cfg.fakeUnterkunft2)}" alt="Scherzhaftes Mikro-Zimmer als erste Fake-Unterkunft">
-      <span class="fake-label">KATEGORIE: KOMPAKT</span>
-      <p class="muted" style="margin-top:15px">Effizient geschnitten. Wenig Laufwege. Wer sich umdrehen will, sollte es vorher anmelden.</p>
+      <img class="fake-picture" src="${escapeHTML(cfg.fakeUnterkunft2)}" alt="Verlassener Schlafplatz unter einer Brücke als erste Fake-Unterkunft">
+      <span class="fake-label">DELUXE OPEN AIR</span>
+      <p class="muted" style="margin-top:15px">Jetzt mit erheblich mehr Platz, maximaler Frischluft und bester Anbindung an die Unterseite einer Brücke.</p>
       <div class="buttons">${button('fake-next','Äh … weiter? →','full')}</div>`);
     $('#fake-next').onclick=()=>next();
   }
@@ -346,9 +407,9 @@
     app.innerHTML=panel('DEIN GESCHENK // REISEUNTERLAGEN 2 / 4', `
       ${stamp('UPGRADE BESTÄTIGT')}
       <h2>Okay. Zugegeben.<br><span class="accent">Wir haben noch ein Upgrade.</span></h2>
-      <img class="fake-picture" src="${escapeHTML(cfg.fakeUnterkunft1)}" alt="Scherzhafte Unterkunft aus Kartons unter einer Brücke">
-      <span class="fake-label">DELUXE OPEN AIR</span>
-      <p class="lead">Jetzt mit erheblich mehr Platz, maximaler Frischluft und bester Anbindung an die Unterseite einer Brücke.</p>
+      <img class="fake-picture" src="${escapeHTML(cfg.fakeUnterkunft1)}" alt="Kleines Schlafzimmer mit Etagenbett als zweite Fake-Unterkunft">
+      <span class="fake-label">KATEGORIE: KOMPAKT</span>
+      <p class="lead">Effizient geschnitten. Wenig Laufwege. Wer sich umdrehen will, sollte es vorher anmelden.</p>
       <div class="buttons">${button('fake-next','Das kann noch nicht alles sein … →','full')}</div>`);
     $('#fake-next').onclick=()=>next();
   }
@@ -364,17 +425,81 @@
   }
   function mapReveal() {
     const image = String(cfg.kartenBild || '').trim();
-    const map = image ? `<img class="map-img" src="${escapeHTML(image)}" alt="Karte unseres Reiseziels">` :
-      `<iframe class="map-frame" title="Karte unseres Reiseziels: Braunlage im Harz" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="${escapeHTML(cfg.googleMapsEmbed)}"></iframe>`;
+    const mapImage = image || 'assets/karte-braunlage.png';
     app.innerHTML=panel('DEIN GESCHENK // REISEUNTERLAGEN 4 / 4', `
-      ${stamp('GENUG QUATSCH')}
-      <h2>So. <span class="accent">Hier geht es wirklich hin.</span></h2>
-      <p class="muted">Kein Karton. Keine Brücke. Die bisherige Unterkunft war eine bewusste Falschinformation.</p>
-      ${map}
-      <p class="muted small">Falls die Karte nicht angezeigt wird: <a href="${escapeHTML(cfg.googleMapsUrl)}" target="_blank" rel="noopener noreferrer">Standort auf Google Maps öffnen ↗</a></p>
-      <div class="destination"><span class="small muted">REISEZIEL IDENTIFIZIERT</span><strong>${escapeHTML(cfg.ziel)}</strong></div>
-      <div class="buttons">${button('map-next','Und wo schlafen wir? →','full')}</div>`);
-    $('#map-next').onclick=()=>next();
+      ${stamp('JETZT WIRD ES KONKRET')}
+      <h2>Hier liegt unser <span class="accent">geheimer Zielort.</span></h2>
+      <p class="muted">Die Aufnahme stammt von oben. Tippe auf die Karte, um sie groß zu öffnen. Du kannst auf dem Handy mit zwei Fingern zoomen und den Ausschnitt verschieben.</p>
+      <button type="button" class="map-open" id="map-open" aria-label="Satellitenkarte vergrößern"><img class="map-img" src="${escapeHTML(mapImage)}" alt="Satellitenkarte mit markierten Hinweisen"><span>⌕ &nbsp;KARTE VERGRÖSSERN</span></button>
+      <form id="location-form" class="location-form"><label class="field-label" for="location-answer">Welcher Ort ist auf der Karte zu sehen?</label>
+      <input class="input" id="location-answer" placeholder="Ortsname eingeben …" autocapitalize="words" autocomplete="off" spellcheck="false" required>
+      ${feedback()}<div class="buttons"><button type="submit" class="btn full">Ort bestätigen →</button></div></form>
+      <div id="map-modal" class="map-modal" hidden role="dialog" aria-modal="true" aria-label="Satellitenkarte vergrößern">
+        <div class="map-modal-head"><strong>AKTE 51 // SATELLITENBILD</strong><button type="button" id="map-close" class="map-icon-btn" aria-label="Karte schließen">✕</button></div>
+        <div class="map-viewport" id="map-viewport"><img id="map-zoom-image" src="${escapeHTML(mapImage)}" alt="Vergrößerbare Satellitenkarte" draggable="false"></div>
+        <div class="map-tools"><button type="button" id="map-less" aria-label="Herauszoomen">−</button><span id="map-scale">100 %</span><button type="button" id="map-more" aria-label="Hineinzoomen">+</button><button type="button" id="map-reset">Zurücksetzen</button></div>
+        <p>Mit zwei Fingern zoomen · mit einem Finger verschieben · am PC Mausrad benutzen</p>
+      </div>`);
+    $('#location-form').onsubmit = e => {
+      e.preventDefault();
+      if (normalize($('#location-answer').value) === 'BRAUNLAGE') next();
+      else error('Noch nicht der richtige Ort. Schau dir die markierten Stellen auf der Karte genauer an.');
+    };
+    setupMapZoom();
+  }
+  function setupMapZoom() {
+    const modal = $('#map-modal');
+    const viewport = $('#map-viewport');
+    const img = $('#map-zoom-image');
+    let zoom = 1, tx = 0, ty = 0;
+    const points = new Map();
+    let lastDistance = null;
+    let lastCenter = null;
+    const clamp = (value,min,max) => Math.min(max,Math.max(min,value));
+    const apply = () => {
+      const maxX = (viewport.clientWidth * Math.max(0,zoom-1))/2;
+      const maxY = (viewport.clientHeight * Math.max(0,zoom-1))/2;
+      tx=clamp(tx,-maxX,maxX);ty=clamp(ty,-maxY,maxY);
+      img.style.transform=`translate(${tx}px,${ty}px) scale(${zoom})`;
+      $('#map-scale').textContent=`${Math.round(zoom*100)} %`;
+    };
+    const setZoom = value => {zoom=clamp(value,1,6);if(zoom===1){tx=0;ty=0;}apply();};
+    const close = () => {modal.hidden=true; document.body.classList.remove('map-is-open');points.clear();lastDistance=null;};
+    $('#map-open').onclick = () => {modal.hidden=false;document.body.classList.add('map-is-open');setZoom(1);};
+    $('#map-close').onclick=close;
+    modal.addEventListener('click',e=>{if(e.target===modal)close();});
+    $('#map-more').onclick=()=>setZoom(zoom*1.5);
+    $('#map-less').onclick=()=>setZoom(zoom/1.5);
+    $('#map-reset').onclick=()=>setZoom(1);
+    viewport.addEventListener('wheel',e=>{e.preventDefault();setZoom(zoom*(e.deltaY<0?1.18:1/1.18));},{passive:false});
+    const distance = ([a,b]) => Math.hypot(a.x-b.x,a.y-b.y);
+    const center = ([a,b]) => ({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+    viewport.addEventListener('pointerdown',e=>{
+      e.preventDefault();viewport.setPointerCapture(e.pointerId);
+      points.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(points.size===2){const pair=[...points.values()];lastDistance=distance(pair);lastCenter=center(pair);}
+    });
+    viewport.addEventListener('pointermove',e=>{
+      if(!points.has(e.pointerId))return;
+      e.preventDefault();
+      const old=points.get(e.pointerId);
+      points.set(e.pointerId,{x:e.clientX,y:e.clientY});
+      if(points.size===1){tx+=e.clientX-old.x;ty+=e.clientY-old.y;apply();}
+      else if(points.size===2){
+        const pair=[...points.values()];const nowDistance=distance(pair);const nowCenter=center(pair);
+        if(lastDistance&&lastDistance>0)zoom=clamp(zoom*nowDistance/lastDistance,1,6);
+        if(lastCenter){tx+=nowCenter.x-lastCenter.x;ty+=nowCenter.y-lastCenter.y;}
+        lastDistance=nowDistance;lastCenter=nowCenter;apply();
+      }
+    });
+    const removePointer = e=>{
+      points.delete(e.pointerId);lastDistance=null;lastCenter=null;
+      if(points.size===2){const pair=[...points.values()];lastDistance=distance(pair);lastCenter=center(pair);}
+    };
+    viewport.addEventListener('pointerup',removePointer);
+    viewport.addEventListener('pointercancel',removePointer);
+    document.addEventListener('keydown',e=>{if(e.key==='Escape'&&!modal.hidden)close();});
+    apply();
   }
   function finalReveal() {
     app.innerHTML=panel('AKTE W-51 // ENDE DER ERMITTLUNGEN', `
