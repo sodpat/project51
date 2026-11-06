@@ -25,6 +25,7 @@
   if (!Array.isArray(g.puzzle) || g.puzzle.length !== 9) g.puzzle = fresh().puzzle;
   if (g.stage < 0 || g.stage > 14) g.stage = 0;
   let selectedTile = null, pointerStart = null, suppressClickUntil = 0, memBusy = false, previewTimer = null, catRaf = null;
+  let signalAudio = null;  // MP3 for the first interrogation question
   const save = () => { try {localStorage.setItem(STORE, JSON.stringify(g));} catch (_) {} };
   const panel = (eyebrow, body) => `<section class="panel"><p class="eyebrow">${eyebrow}</p>${body}</section>`;
   const stamp = s => `<span class="stamp">◉ &nbsp;${s}</span>`;
@@ -344,7 +345,7 @@
       <div class="question-number">FRAGE ${String(i+1).padStart(2,'0')} / ${QUESTIONS.length} &nbsp; · &nbsp; DEIN STATUS: VERWIRRT</div>
       ${stamp('UNBESTÄTIGTES SIGNAL')}
       <div class="question-text ${i>10?'glitch':''}">${QUESTIONS[i]}</div>
-      ${i===0 ? '<div class="buttons" style="margin-top:0;margin-bottom:18px">'+button('play-signal','🔊 Seltsames Geräusch abspielen','ghost')+'</div>' : ''}
+      ${i===0 ? '<div class="buttons" style="margin-top:0;margin-bottom:10px">'+button('play-signal','🔊 Seltsames Geräusch abspielen','ghost')+'</div><p id="signal-feedback" class="muted small" role="status"></p>' : ''}
       <p class="muted small">Beantworte die Frage. Deine Antwort wird irgendwo protokolliert. Vermutlich.</p>
       <div class="choice-grid">${button('yes','JA','secondary')}${button('no','NEIN','secondary')}</div>`);
     if($('#play-signal')) $('#play-signal').onclick = playSignal;
@@ -354,12 +355,33 @@
     });
   }
   function playSignal() {
+    const btn = $('#play-signal');
+    const status = $('#signal-feedback');
+    const failure = () => {
+      if (btn) btn.textContent = '🔊 Noch einmal versuchen';
+      if (status) {
+        status.innerHTML = 'Die Audiodatei konnte nicht abgespielt werden. <a href="assets/signal-miau.mp3" target="_blank" rel="noopener noreferrer">Miau direkt öffnen</a>';
+      }
+    };
     try {
-      if (!signalAudio) signalAudio = new Audio('assets/signal-miau.mp3');
+      // The call is triggered directly by a tap; required for audio on mobile browsers.
+      if (!signalAudio) {
+        signalAudio = new Audio('assets/signal-miau.mp3?v=8');
+        signalAudio.preload = 'auto';
+        signalAudio.addEventListener('ended', () => {
+          const currentButton = $('#play-signal');
+          if (currentButton) currentButton.textContent = '🔊 Noch einmal abspielen';
+        });
+        signalAudio.addEventListener('error', failure);
+      }
       signalAudio.pause();
       signalAudio.currentTime = 0;
-      signalAudio.play().catch(() => {});
-    } catch (_) { /* Ton ist optional; die Mission bleibt auch ohne ihn spielbar. */ }
+      // Do not swallow playback errors: show a fallback when browser or asset blocks sound.
+      const playback = signalAudio.play();
+      if (btn) btn.textContent = '🔊 Miau wird abgespielt …';
+      if (status) status.textContent = 'Ton läuft – bei Bedarf Medienlautstärke prüfen.';
+      if (playback && typeof playback.catch === 'function') playback.catch(failure);
+    } catch (_) { failure(); }
   }
   async function sha256(text) {
     if (!window.crypto?.subtle) throw new Error('Bitte über HTTPS (GitHub Pages) öffnen.');
